@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { Mountain } from '@/lib/types'
+import ClimbButton from '@/components/ClimbButton'
+import { areaGradient } from '@/lib/mountain-utils'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -54,21 +56,21 @@ export default async function MountainDetailPage({ params }: PageProps) {
         ← トップへ戻る
       </Link>
 
-      {/* ヘッダーカード */}
-      <div className="overflow-hidden rounded-2xl bg-green-800 px-5 py-6 text-white shadow-md">
+      {/* ヘッダーカード（エリア別グラデーション） */}
+      <div className={`overflow-hidden rounded-2xl bg-gradient-to-br ${areaGradient(mountain.area)} px-5 py-6 text-white shadow-md`}>
         <div className="mb-1 flex items-center gap-2">
-          <span className="rounded-full bg-green-700 px-2.5 py-0.5 text-xs font-medium">
+          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-medium">
             {mountain.area}
           </span>
-          <span className="text-xs text-green-300">{mountain.prefecture}</span>
+          <span className="text-xs text-white/70">{mountain.prefecture}</span>
         </div>
         <h1 className="text-3xl font-bold">{mountain.name}</h1>
         {mountain.name_kana && (
-          <p className="mt-0.5 text-sm text-green-300">{mountain.name_kana}</p>
+          <p className="mt-0.5 text-sm text-white/70">{mountain.name_kana}</p>
         )}
         <p className="mt-4 text-4xl font-bold">
           {mountain.elevation.toLocaleString()}
-          <span className="ml-1 text-xl font-normal text-green-300">m</span>
+          <span className="ml-1 text-xl font-normal text-white/70">m</span>
         </p>
       </div>
 
@@ -163,6 +165,13 @@ export default async function MountainDetailPage({ params }: PageProps) {
           )}
         </div>
       )}
+
+      {/* 登頂記録ボタン */}
+      <ClimbButton
+        mountainId={mountain.id}
+        mountainName={mountain.name}
+        mountainArea={mountain.area}
+      />
 
       {/* トップに戻ってAI提案を使う */}
       <Link
