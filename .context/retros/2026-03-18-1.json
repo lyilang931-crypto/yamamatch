@@ -1,0 +1,42 @@
+{
+  "date": "2026-03-18",
+  "window": "7d",
+  "metrics": {
+    "commits": 3,
+    "contributors": 1,
+    "prs_merged": 1,
+    "insertions": 8563,
+    "deletions": 44,
+    "net_loc": 8519,
+    "test_loc": 0,
+    "test_ratio": 0.0,
+    "active_days": 1,
+    "sessions": 1,
+    "deep_sessions": 0,
+    "avg_session_minutes": 39,
+    "loc_per_session_hour": 13150,
+    "feat_pct": 0.67,
+    "fix_pct": 0.0,
+    "chore_pct": 0.33,
+    "peak_hour": 3,
+    "ai_assisted_commits": 2
+  },
+  "authors": {
+    "lyilang931": {
+      "commits": 3,
+      "insertions": 8563,
+      "deletions": 44,
+      "test_ratio": 0.0,
+      "top_area": "app/api/"
+    }
+  },
+  "version_range": ["0.0.0.0", "0.1.0.0"],
+  "streak_days": 1,
+  "tweetable": "Week of Mar 18: 3 commits (solo), 8.5k LOC, 0% tests, 1 PR merged, peak: 03:00 PT | Streak: 1d",
+  "test_health": {
+    "total_test_files": 0,
+    "tests_added_this_period": 0,
+    "regression_test_commits": 0,
+    "test_files_changed": 0
+  }
+}

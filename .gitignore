@@ -42,3 +42,6 @@ supabase/.temp/
 
 # claude code local settings
 .claude/settings.local.json
+
+# gstack local state
+.gstack/
