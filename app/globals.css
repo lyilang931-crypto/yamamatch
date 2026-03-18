@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F5F0E8;
+  --foreground: #1C1C1C;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP',
+    'Yu Gothic', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #e8e0d0;
+}
+::-webkit-scrollbar-thumb {
+  background: #4a7c2f;
+  border-radius: 2px;
+}
