@@ -3,6 +3,12 @@
 All notable changes to YamaMatch will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.1.1] - 2026-03-18
+
+### Added
+- `.gstack/` をgitignoreに追加（ローカルツール状態を除外）
+- `.context/retros/` にレトロスナップショットを保存開始
+
 ## [0.1.1.0] - 2026-03-18
 
 ### Changed
