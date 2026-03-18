@@ -3,6 +3,13 @@
 All notable changes to YamaMatch will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.1.0] - 2026-03-18
+
+### Changed
+- AI 提案エンジンを Gemini → OpenAI `gpt-4o-mini` に変更（`OPENAI_API_KEY` 環境変数）
+- OpenAI API エラー時は `OpenAI.APIError` で status/message を詳細ログ出力
+- 未使用パッケージ `@anthropic-ai/sdk`・`@google/generative-ai` を削除
+
 ## [0.1.0.0] - 2026-03-18
 
 ### Added
