@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@/lib/supabase/server'
 import type { SuggestRequest, MountainSuggestion, Mountain } from '@/lib/types'
 
@@ -6,14 +7,94 @@ export interface SuggestApiResponse {
   suggestions: Array<MountainSuggestion & { mountain: Mountain }>
 }
 
-// experience_level → 難易度レンジ
+// ============================================================
+// Gemini AI ロジック
+// ============================================================
+
+const EXPERIENCE_LABEL: Record<string, string> = {
+  beginner:     '初心者（登山経験がほとんどない）',
+  intermediate: '中級者（年数回登山する）',
+  advanced:     '上級者（定期的に登山し体力がある）',
+}
+
+function buildPrompt(body: SuggestRequest, mountains: Mountain[]): string {
+  const mountainsData = mountains.map((m) => ({
+    id: m.id,
+    name: m.name,
+    area: m.area,
+    prefecture: m.prefecture,
+    elevation: m.elevation,
+    difficulty: m.difficulty,
+    estimated_time_min: m.estimated_time_min,
+    distance_km: m.distance_km,
+    elevation_gain: m.elevation_gain,
+    features: m.features,
+    best_seasons: m.best_seasons,
+    description: m.description,
+  }))
+
+  return `あなたは関西の山に詳しい登山ガイドのAIです。
+ユーザー情報と山のデータを参照し、最適な山を3つ選んで提案してください。
+
+【ユーザー情報】
+- 体力レベル: ${body.fitness_level}/5（1=低い、5=非常に高い）
+- 経験レベル: ${EXPERIENCE_LABEL[body.experience_level] ?? body.experience_level}
+- 今日の目的: ${body.purpose}
+- 同行者: ${body.companions}
+- 利用可能時間: ${body.available_hours}時間
+
+【関西の山データ（JSON）】
+${JSON.stringify(mountainsData, null, 2)}
+
+上記データから最適な山を3つ選び、以下のJSON配列のみを返してください。
+マークダウンや説明文は一切不要です。JSONのみ出力してください。
+
+[
+  {
+    "mountain_id": "（山のid文字列をそのまま）",
+    "reason": "（なぜこのユーザーにこの山がおすすめか、体力・目的・同行者を踏まえて2〜3文で）",
+    "estimated_time_for_user": （このユーザーの体力レベルを考慮した予想所要時間、分単位の整数）,
+    "tips": "（この山をこのユーザーが登る際の具体的なアドバイス1〜2文）"
+  }
+]`
+}
+
+function parseGeminiJson(text: string): MountainSuggestion[] {
+  const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  const match = cleaned.match(/\[[\s\S]*\]/)
+  if (!match) throw new Error('JSON配列が見つかりませんでした')
+  return JSON.parse(match[0]) as MountainSuggestion[]
+}
+
+async function suggestWithGemini(
+  body: SuggestRequest,
+  mountains: Mountain[]
+): Promise<Array<MountainSuggestion & { mountain: Mountain }>> {
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const prompt = buildPrompt(body, mountains)
+  const result = await model.generateContent(prompt)
+  const suggestions = parseGeminiJson(result.response.text())
+
+  const enriched: Array<MountainSuggestion & { mountain: Mountain }> = []
+  for (const s of suggestions) {
+    const mountain = mountains.find((m) => m.id === s.mountain_id)
+    if (mountain) enriched.push({ ...s, mountain })
+  }
+  if (enriched.length === 0) throw new Error('Geminiが有効な山IDを返しませんでした')
+  return enriched
+}
+
+// ============================================================
+// フォールバック（モック）ロジック
+// ============================================================
+
 const DIFFICULTY_RANGE: Record<string, { min: number; max: number }> = {
   beginner:     { min: 1, max: 2 },
   intermediate: { min: 2, max: 4 },
   advanced:     { min: 3, max: 5 },
 }
 
-// purpose → 関連する特徴タグ
 const PURPOSE_FEATURES: Record<string, string[]> = {
   景色:           ['景色', '眺望', '展望'],
   達成感:         ['岩場', '縦走', '急登'],
@@ -21,7 +102,6 @@ const PURPOSE_FEATURES: Record<string, string[]> = {
   体力づくり:     ['縦走', '急登', '岩場'],
 }
 
-// fitness_level（1-5）に基づく所要時間係数（低いほど時間がかかる）
 function timeMultiplier(fitnessLevel: number): number {
   const multipliers: Record<number, number> = { 1: 1.5, 2: 1.3, 3: 1.1, 4: 1.0, 5: 0.9 }
   return multipliers[fitnessLevel] ?? 1.1
@@ -49,13 +129,42 @@ function buildMockSuggestion(mountain: Mountain, body: SuggestRequest): Mountain
       ? '無理せず休憩を挟みながら、余裕のあるペースで歩きましょう。'
       : '天候と体調を確認し、十分な水分・食料を携帯してください。'
 
-  return {
-    mountain_id: mountain.id,
-    reason: reasonParts.join(''),
-    estimated_time_for_user,
-    tips,
-  }
+  return { mountain_id: mountain.id, reason: reasonParts.join(''), estimated_time_for_user, tips }
 }
+
+function suggestWithMock(
+  body: SuggestRequest,
+  mountains: Mountain[]
+): Array<MountainSuggestion & { mountain: Mountain }> {
+  const { min, max } = DIFFICULTY_RANGE[body.experience_level] ?? { min: 1, max: 5 }
+  const availableMinutes = body.available_hours * 60
+  const purposeFeatures = PURPOSE_FEATURES[body.purpose] ?? []
+
+  const filtered = mountains.filter((m) => {
+    const d = m.difficulty ?? 3
+    return d >= min && d <= max
+  })
+
+  const withinTime = filtered.filter(
+    (m) => (m.estimated_time_min ?? 0) * timeMultiplier(body.fitness_level) <= availableMinutes
+  )
+  const candidates = withinTime.length >= 3 ? withinTime : filtered
+
+  const scored = candidates.map((m) => ({
+    mountain: m,
+    score: (m.features ?? []).filter((f) => purposeFeatures.some((pf) => f.includes(pf))).length,
+  }))
+  scored.sort((a, b) => b.score - a.score)
+
+  return scored.slice(0, 3).map(({ mountain }) => ({
+    ...buildMockSuggestion(mountain, body),
+    mountain,
+  }))
+}
+
+// ============================================================
+// POST ハンドラ
+// ============================================================
 
 export async function POST(request: Request) {
   try {
@@ -66,9 +175,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient()
-    const { data: rawMountains, error: dbError } = await supabase
-      .from('mountains')
-      .select('*')
+    const { data: rawMountains, error: dbError } = await supabase.from('mountains').select('*')
     const mountains = rawMountains as Mountain[] | null
 
     if (dbError) throw dbError
@@ -76,39 +183,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '山データが登録されていません' }, { status: 404 })
     }
 
-    const { min, max } = DIFFICULTY_RANGE[body.experience_level] ?? { min: 1, max: 5 }
-    const availableMinutes = body.available_hours * 60
-    const purposeFeatures = PURPOSE_FEATURES[body.purpose] ?? []
+    // Gemini API を試み、失敗したらモックにフォールバック
+    const hasApiKey = !!process.env.GEMINI_API_KEY
+    let suggestions: Array<MountainSuggestion & { mountain: Mountain }>
+    let usedFallback = false
 
-    // 難易度でフィルタリング
-    const filtered = mountains.filter((m) => {
-      const d = m.difficulty ?? 3
-      return d >= min && d <= max
-    })
+    if (hasApiKey) {
+      try {
+        suggestions = await suggestWithGemini(body, mountains)
+      } catch (geminiError) {
+        console.warn('Gemini API failed, falling back to mock:', geminiError)
+        suggestions = suggestWithMock(body, mountains)
+        usedFallback = true
+      }
+    } else {
+      console.warn('GEMINI_API_KEY not set, using mock suggestions')
+      suggestions = suggestWithMock(body, mountains)
+      usedFallback = true
+    }
 
-    // 利用可能時間内に収まるものを優先（超えるものも残す）
-    const withinTime = filtered.filter(
-      (m) => (m.estimated_time_min ?? 0) * timeMultiplier(body.fitness_level) <= availableMinutes
-    )
-    const candidates = withinTime.length >= 3 ? withinTime : filtered
-
-    // purposeに合う特徴タグを持つ山をスコアリングして上位3件を選択
-    const scored = candidates.map((m) => {
-      const featureScore = (m.features ?? []).filter((f) =>
-        purposeFeatures.some((pf) => f.includes(pf))
-      ).length
-      return { mountain: m, score: featureScore }
-    })
-
-    scored.sort((a, b) => b.score - a.score)
-    const top3 = scored.slice(0, 3).map((s) => s.mountain)
-
-    const enriched = top3.map((mountain) => ({
-      ...buildMockSuggestion(mountain, body),
-      mountain,
-    }))
-
-    return NextResponse.json({ suggestions: enriched })
+    return NextResponse.json({ suggestions, fallback: usedFallback })
   } catch (error) {
     console.error('Suggest API error:', error)
     const message = error instanceof Error ? error.message : '提案の生成に失敗しました'
