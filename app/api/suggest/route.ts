@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 import type { SuggestRequest, MountainSuggestion, Mountain } from '@/lib/types'
 
@@ -8,7 +8,7 @@ export interface SuggestApiResponse {
 }
 
 // ============================================================
-// Gemini AI ロジック
+// OpenAI ロジック
 // ============================================================
 
 const EXPERIENCE_LABEL: Record<string, string> = {
@@ -59,29 +59,35 @@ ${JSON.stringify(mountainsData, null, 2)}
 ]`
 }
 
-function parseGeminiJson(text: string): MountainSuggestion[] {
+function parseOpenAIJson(text: string): MountainSuggestion[] {
   const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
   const match = cleaned.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('JSON配列が見つかりませんでした')
   return JSON.parse(match[0]) as MountainSuggestion[]
 }
 
-async function suggestWithGemini(
+async function suggestWithOpenAI(
   body: SuggestRequest,
   mountains: Mountain[]
 ): Promise<Array<MountainSuggestion & { mountain: Mountain }>> {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const prompt = buildPrompt(body, mountains)
-  const result = await model.generateContent(prompt)
-  const suggestions = parseGeminiJson(result.response.text())
+  const completion = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const text = completion.choices[0]?.message?.content
+  if (!text) throw new Error('OpenAIからテキストレスポンスがありませんでした')
+  const suggestions = parseOpenAIJson(text)
 
   const enriched: Array<MountainSuggestion & { mountain: Mountain }> = []
   for (const s of suggestions) {
     const mountain = mountains.find((m) => m.id === s.mountain_id)
     if (mountain) enriched.push({ ...s, mountain })
   }
-  if (enriched.length === 0) throw new Error('Geminiが有効な山IDを返しませんでした')
+  if (enriched.length === 0) throw new Error('OpenAIが有効な山IDを返しませんでした')
   return enriched
 }
 
@@ -183,21 +189,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '山データが登録されていません' }, { status: 404 })
     }
 
-    // Gemini API を試み、失敗したらモックにフォールバック
-    const hasApiKey = !!process.env.GEMINI_API_KEY
+    // OpenAI API を試み、失敗したらモックにフォールバック
+    const hasApiKey = !!process.env.OPENAI_API_KEY
     let suggestions: Array<MountainSuggestion & { mountain: Mountain }>
     let usedFallback = false
 
     if (hasApiKey) {
       try {
-        suggestions = await suggestWithGemini(body, mountains)
-      } catch (geminiError) {
-        console.warn('Gemini API failed, falling back to mock:', geminiError)
+        suggestions = await suggestWithOpenAI(body, mountains)
+      } catch (openAIError) {
+        if (openAIError instanceof OpenAI.APIError) {
+          console.warn('OpenAI API failed (status=%d): %s', openAIError.status, openAIError.message)
+        } else {
+          console.warn('OpenAI API failed, falling back to mock:', openAIError)
+        }
         suggestions = suggestWithMock(body, mountains)
         usedFallback = true
       }
     } else {
-      console.warn('GEMINI_API_KEY not set, using mock suggestions')
+      console.warn('OPENAI_API_KEY not set, using mock suggestions')
       suggestions = suggestWithMock(body, mountains)
       usedFallback = true
     }
