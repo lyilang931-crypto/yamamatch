@@ -144,4 +144,16 @@ export interface SuggestRequest {
   purpose: '景色' | '達成感' | '軽めのハイキング' | '体力づくり'
   companions: '一人' | '友人' | '家族' | 'カップル'
   available_hours: number
+  preferred_features?: string[]
+}
+
+// localStorage に保存する山行記録
+export interface LocalClimbRecord {
+  id: string
+  mountain_id: string
+  mountain_name: string
+  mountain_area: string
+  climbed_at: string   // ISO date string
+  difficulty_felt: number | null
+  memo: string
 }
