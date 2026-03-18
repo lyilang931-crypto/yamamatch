@@ -3,6 +3,23 @@
 All notable changes to YamaMatch will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.2.0] - 2026-03-18
+
+### Added
+- 山一覧ページ (`/mountains`) — 全30件表示、山名・エリアのテキスト検索、難易度フィルター対応
+- 山行記録ページ (`/records`) — 登頂回数・最多登頂山を集計するダッシュボード＋記録一覧
+- 「登頂！」クイック記録ボタン — 山詳細ページから体感難易度・メモを入力してlocalStorageに保存
+- `TODOS.md` を新設 — Auth・SNSシェアなどの将来タスクをトラッキング
+- 共有ユーティリティ `lib/mountain-utils.ts` — `AREA_COLORS`・`areaGradient`・`RECORDS_KEY` を集約
+
+### Changed
+- 山詳細ページのヘッダーをエリア別グラデーションに変更（六甲=緑、金剛=琥珀、比良=青緑、大峰=紫、他）
+- ナビゲーションバーに「記録」リンクを追加
+- AI提案APIにフォールバック通知UIを追加 — `fallback: true` 時にアンバー色のバナーを表示
+
+### Fixed
+- プロフィールの「好みの特徴」がAIプロンプトに送信されていなかったバグを修正 — 設定した特徴が提案に反映されるように
+
 ## [0.1.1.1] - 2026-03-18
 
 ### Added
