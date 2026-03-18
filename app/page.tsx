@@ -10,6 +10,7 @@ interface StoredProfile {
   display_name: string
   fitness_level: number
   experience_level: ExperienceLevel | ''
+  preferred_features?: string[]
 }
 
 interface EnrichedSuggestion extends MountainSuggestion {
@@ -171,6 +172,7 @@ export default function HomePage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<EnrichedSuggestion[] | null>(null)
+  const [usedFallback, setUsedFallback] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -196,6 +198,7 @@ export default function HomePage() {
 
     setIsLoading(true)
     setSuggestions(null)
+    setUsedFallback(false)
     setError(null)
 
     try {
@@ -208,6 +211,7 @@ export default function HomePage() {
           purpose: form.purpose,
           companions: form.companions,
           available_hours: form.available_hours,
+          preferred_features: profile?.preferred_features ?? [],
         }),
       })
 
@@ -216,6 +220,7 @@ export default function HomePage() {
       if (!res.ok) throw new Error(data.error ?? 'AI提案の取得に失敗しました')
 
       setSuggestions(data.suggestions)
+      setUsedFallback(data.fallback === true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
@@ -392,6 +397,13 @@ export default function HomePage() {
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
           <p className="font-semibold">エラーが発生しました</p>
           <p className="mt-1">{error}</p>
+        </div>
+      )}
+
+      {/* フォールバック通知 */}
+      {usedFallback && suggestions && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          ⚠️ AIが利用できないため、フィルタリングによる提案を表示しています。
         </div>
       )}
 

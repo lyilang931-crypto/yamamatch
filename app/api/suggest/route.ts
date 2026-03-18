@@ -33,6 +33,11 @@ function buildPrompt(body: SuggestRequest, mountains: Mountain[]): string {
     description: m.description,
   }))
 
+  const featuresLine =
+    body.preferred_features && body.preferred_features.length > 0
+      ? `\n- 好みの特徴: ${body.preferred_features.join('、')}`
+      : ''
+
   return `あなたは関西の山に詳しい登山ガイドのAIです。
 ユーザー情報と山のデータを参照し、最適な山を3つ選んで提案してください。
 
@@ -41,7 +46,7 @@ function buildPrompt(body: SuggestRequest, mountains: Mountain[]): string {
 - 経験レベル: ${EXPERIENCE_LABEL[body.experience_level] ?? body.experience_level}
 - 今日の目的: ${body.purpose}
 - 同行者: ${body.companions}
-- 利用可能時間: ${body.available_hours}時間
+- 利用可能時間: ${body.available_hours}時間${featuresLine}
 
 【関西の山データ（JSON）】
 ${JSON.stringify(mountainsData, null, 2)}
