@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import type { Mountain } from '@/lib/types'
+import type { Mountain, WeatherData } from '@/lib/types'
 import ClimbButton from '@/components/ClimbButton'
 import { areaGradient } from '@/lib/mountain-utils'
+import { fetchWeatherForLocation } from '@/lib/weather'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -14,6 +15,44 @@ function formatTime(min: number | null) {
   const h = Math.floor(min / 60)
   const m = min % 60
   return h > 0 ? (m > 0 ? `${h}時間${m}分` : `${h}時間`) : `${m}分`
+}
+
+function WeatherCard({ weather }: { weather: WeatherData }) {
+  const rainPct = Math.round(weather.rain_probability * 100)
+  const rainColor = rainPct >= 60 ? 'text-blue-600' : rainPct >= 30 ? 'text-sky-500' : 'text-stone-500'
+
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4">
+      <h2 className="mb-3 text-sm font-semibold text-green-900">今日の天気</h2>
+      <div className="flex items-center gap-3">
+        <img
+          src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
+          alt={weather.description}
+          width={56}
+          height={56}
+          className="shrink-0"
+        />
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+          <div>
+            <span className="text-stone-400">気温</span>
+            <span className="ml-2 font-bold text-stone-800">{weather.temp}°C</span>
+          </div>
+          <div>
+            <span className="text-stone-400">天気</span>
+            <span className="ml-2 text-stone-700">{weather.description}</span>
+          </div>
+          <div>
+            <span className="text-stone-400">風速</span>
+            <span className="ml-2 font-semibold text-stone-700">{weather.wind_speed} m/s</span>
+          </div>
+          <div>
+            <span className="text-stone-400">降水確率</span>
+            <span className={`ml-2 font-semibold ${rainColor}`}>{rainPct}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function DifficultyBar({ level }: { level: number | null }) {
@@ -46,6 +85,16 @@ export default async function MountainDetailPage({ params }: PageProps) {
 
   if (error || !mountain) notFound()
 
+  // 天気を並行取得（lat/lng がなければスキップ）
+  let weather: WeatherData | null = null
+  if (mountain.lat && mountain.lng) {
+    try {
+      weather = await fetchWeatherForLocation(mountain.lat, mountain.lng)
+    } catch {
+      // 天気取得失敗は無視してページを表示
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* 戻るリンク */}
@@ -73,6 +122,9 @@ export default async function MountainDetailPage({ params }: PageProps) {
           <span className="ml-1 text-xl font-normal text-white/70">m</span>
         </p>
       </div>
+
+      {/* 天気 */}
+      {weather && <WeatherCard weather={weather} />}
 
       {/* スタッツグリッド */}
       <div className="grid grid-cols-2 gap-3">
