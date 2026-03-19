@@ -60,7 +60,21 @@ export interface Mountain {
   access_info: string | null
   parking_available: boolean
   image_url: string | null
+  lat: number | null
+  lng: number | null
   created_at: string
+}
+
+// ============================================================
+// 天気データ（OpenWeatherMap）
+// ============================================================
+
+export interface WeatherData {
+  temp: number          // 気温(°C)
+  description: string   // 天気の説明
+  icon: string          // アイコンコード
+  wind_speed: number    // 風速(m/s)
+  rain_probability: number // 降水確率(0-1)
 }
 
 export type MountainInsert = Omit<Mountain, 'id' | 'created_at'> & {

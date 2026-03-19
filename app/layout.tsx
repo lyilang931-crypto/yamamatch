@@ -23,10 +23,10 @@ export default function RootLayout({
               </span>
             </a>
             <nav className="flex items-center gap-3 text-sm font-medium text-green-800">
-              <a href="/mountains" className="hover:text-green-600 transition-colors hidden sm:block">
+              <a href="/mountains" className="hover:text-green-600 transition-colors">
                 山一覧
               </a>
-              <a href="/records" className="hover:text-green-600 transition-colors hidden sm:block">
+              <a href="/records" className="hover:text-green-600 transition-colors">
                 記録
               </a>
               <a

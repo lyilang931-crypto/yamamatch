@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import type { ExperienceLevel, Mountain, MountainSuggestion } from '@/lib/types'
+import type { ExperienceLevel, Mountain, MountainSuggestion, WeatherData } from '@/lib/types'
 
 // ---- 型 ----
 
@@ -50,14 +50,51 @@ function formatTime(min: number) {
   return h > 0 ? (m > 0 ? `${h}時間${m}分` : `${h}時間`) : `${m}分`
 }
 
+// ---- 天気コンポーネント ----
+
+function WeatherRow({ weather }: { weather: WeatherData | null | 'loading' }) {
+  if (weather === 'loading') {
+    return (
+      <div className="flex items-center gap-3 border-b border-stone-100 px-4 py-2.5 animate-pulse">
+        <div className="h-4 w-4 rounded bg-stone-200" />
+        <div className="h-4 w-32 rounded bg-stone-200" />
+      </div>
+    )
+  }
+  if (!weather) return null
+
+  const rainPct = Math.round(weather.rain_probability * 100)
+  const rainColor = rainPct >= 60 ? 'text-blue-600' : rainPct >= 30 ? 'text-sky-500' : 'text-stone-500'
+
+  return (
+    <div className="flex items-center gap-4 border-b border-stone-100 bg-sky-50/50 px-4 py-2.5 text-sm">
+      <img
+        src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
+        alt={weather.description}
+        width={32}
+        height={32}
+        className="shrink-0"
+      />
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
+        <span className="font-semibold text-stone-700">{weather.temp}°C</span>
+        <span className="text-stone-500">{weather.description}</span>
+        <span className="text-stone-500">💨 {weather.wind_speed}m/s</span>
+        <span className={rainColor}>☂ {rainPct}%</span>
+      </div>
+    </div>
+  )
+}
+
 // ---- コンポーネント ----
 
 function SuggestionCard({
   suggestion,
   rank,
+  weather,
 }: {
   suggestion: EnrichedSuggestion
   rank: number
+  weather: WeatherData | null | 'loading'
 }) {
   const { mountain, reason, estimated_time_for_user, tips } = suggestion
 
@@ -79,6 +116,9 @@ function SuggestionCard({
           <p className="text-xs text-green-300">標高</p>
         </div>
       </div>
+
+      {/* 天気 */}
+      {mountain.lat && mountain.lng && <WeatherRow weather={weather} />}
 
       {/* スタッツ */}
       <div className="grid grid-cols-3 divide-x divide-stone-100 border-b border-stone-100 text-center">
@@ -174,6 +214,33 @@ export default function HomePage() {
   const [suggestions, setSuggestions] = useState<EnrichedSuggestion[] | null>(null)
   const [usedFallback, setUsedFallback] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [weatherMap, setWeatherMap] = useState<Record<string, WeatherData | null | 'loading'>>({})
+
+  async function fetchWeatherForSuggestions(enriched: EnrichedSuggestion[]) {
+    // lat/lng のある山だけ loading 状態にセット
+    const initial: Record<string, WeatherData | null | 'loading'> = {}
+    for (const s of enriched) {
+      if (s.mountain.lat && s.mountain.lng) initial[s.mountain_id] = 'loading'
+    }
+    setWeatherMap(initial)
+
+    // 並列フェッチ
+    await Promise.all(
+      enriched
+        .filter((s) => s.mountain.lat && s.mountain.lng)
+        .map(async (s) => {
+          try {
+            const res = await fetch(
+              `/api/weather?lat=${s.mountain.lat}&lng=${s.mountain.lng}`
+            )
+            const data = res.ok ? (await res.json() as WeatherData) : null
+            setWeatherMap((prev) => ({ ...prev, [s.mountain_id]: data }))
+          } catch {
+            setWeatherMap((prev) => ({ ...prev, [s.mountain_id]: null }))
+          }
+        })
+    )
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -200,6 +267,7 @@ export default function HomePage() {
     setSuggestions(null)
     setUsedFallback(false)
     setError(null)
+    setWeatherMap({})
 
     try {
       const res = await fetch('/api/suggest', {
@@ -221,6 +289,7 @@ export default function HomePage() {
 
       setSuggestions(data.suggestions)
       setUsedFallback(data.fallback === true)
+      fetchWeatherForSuggestions(data.suggestions)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
@@ -415,7 +484,12 @@ export default function HomePage() {
           </h2>
           <div className="space-y-4">
             {suggestions.map((s, i) => (
-              <SuggestionCard key={s.mountain_id} suggestion={s} rank={i + 1} />
+              <SuggestionCard
+                key={s.mountain_id}
+                suggestion={s}
+                rank={i + 1}
+                weather={weatherMap[s.mountain_id] ?? null}
+              />
             ))}
           </div>
         </div>
